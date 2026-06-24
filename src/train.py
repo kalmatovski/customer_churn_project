@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 import joblib 
 
 from sklearn.model_selection import train_test_split
@@ -19,6 +20,14 @@ NUM_FEATURES = [
     "tenure",
     "MonthlyCharges",
     "TotalCharges",
+
+    # Engineered features
+    "AverageMonthlySpend",
+    "IsNewCustomer",
+    "HasLongTermContract",
+    "HasSupportServices",
+    "IsHighMonthlyCharge",
+    "TotalServices",
 ]
 
 CAT_FEATURES = [
@@ -53,6 +62,36 @@ def features_preparation(df,features,target):
     y = df[target].map({"No":0, "Yes":1})
 
     return X,y
+
+
+def add_features(df):
+    df = df.copy()
+    
+    df["TotalCharges"] = pd.to_numeric(df["TotalCharges"], errors="coerce")
+    
+    df["AverageMonthlySpend"] = df["TotalCharges"] / df["tenure"].replace(0, np.nan)
+    df["IsNewCustomer"] = (df["tenure"] <= 12).astype(int)
+    df["HasLongTermContract"] = df["Contract"].isin(["One year", "Two year"]).astype(int)
+    df["HasSupportServices"] = (
+        (df["OnlineSecurity"] == "Yes") | 
+        (df["TechSupport"] == "Yes")
+    ).astype(int)
+    
+    monthly_median = df["MonthlyCharges"].median()
+    df["IsHighMonthlyCharge"] = (df["MonthlyCharges"] > monthly_median).astype(int)
+    
+    service_cols = [
+        "PhoneService",
+        "OnlineSecurity",
+        "OnlineBackup",
+        "DeviceProtection",
+        "TechSupport",
+        "StreamingTV",
+        "StreamingMovies"
+    ]
+    df["TotalServices"] = (df[service_cols] == "Yes").sum(axis=1)
+    
+    return df
 
 
 def build_pipeline():
@@ -114,6 +153,8 @@ def save_model(model,model_path):
 
 def main():
     df = load_data(DATA_PATH)
+
+    df = add_features(df)
 
     X,y = features_preparation(df, FEATURES, TARGET)
 
