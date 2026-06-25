@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import joblib 
 
+
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, classification_report, roc_auc_score
@@ -10,6 +11,7 @@ from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.model_selection import cross_validate
 
 DATA_PATH = 'data/churn.csv'
 MODEL_PATH = "models/model.joblib"
@@ -126,6 +128,31 @@ def build_pipeline():
     return model
 
 
+def cross_validate_model(model, X,y):
+    scoring = {
+        "accuracy": "accuracy",
+        "roc_auc": "roc_auc",
+        "recall": "recall",
+        "f1":"f1"
+    }
+
+    cv_results = cross_validate(
+        model,
+        X,
+        y,
+        cv=5,
+        scoring=scoring,
+        return_train_score = False
+    )
+
+    print("Cross-validation results:")
+    for metric in scoring.keys():
+        scores = cv_results[f"test_{metric}"]
+        print(
+            f"{metric}: {scores.mean():.4f} ± {scores.std():.4f}"
+        )
+
+
 def train_model(model,X_train,y_train):
     model.fit(X_train,y_train)
     return model
@@ -161,6 +188,8 @@ def main():
     X_train, X_test, y_train, y_test = train_test_split(X,y, test_size=0.2,random_state=42, stratify=y)
 
     model = build_pipeline()
+
+    cross_validate_model(model, X, y)
 
     model = train_model(model, X_train, y_train)
 
