@@ -5,6 +5,7 @@ import joblib
 
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.metrics import accuracy_score, classification_report, roc_auc_score
 
 from sklearn.compose import ColumnTransformer
@@ -96,7 +97,7 @@ def add_features(df):
     return df
 
 
-def build_pipeline():
+def build_pipeline(classifier):
     num_transformer = Pipeline(
         steps=[
             ('imputer', SimpleImputer(strategy="median")),
@@ -121,36 +122,11 @@ def build_pipeline():
     model = Pipeline(
         steps=[
             ("preprocessing", preprocessor),
-            ("classifier", LogisticRegression(max_iter=1000))
+            ("classifier", classifier)
         ]
     )
 
     return model
-
-
-def cross_validate_model(model, X,y):
-    scoring = {
-        "accuracy": "accuracy",
-        "roc_auc": "roc_auc",
-        "recall": "recall",
-        "f1":"f1"
-    }
-
-    cv_results = cross_validate(
-        model,
-        X,
-        y,
-        cv=5,
-        scoring=scoring,
-        return_train_score = False
-    )
-
-    print("Cross-validation results:")
-    for metric in scoring.keys():
-        scores = cv_results[f"test_{metric}"]
-        print(
-            f"{metric}: {scores.mean():.4f} ± {scores.std():.4f}"
-        )
 
 
 def train_model(model,X_train,y_train):
@@ -178,24 +154,66 @@ def save_model(model,model_path):
     print(f"Model saved to {model_path}")
 
 
+def compare_models(models, X, y):
+    scoring = {
+        "accuracy": "accuracy",
+        "roc_auc": "roc_auc",
+        "recall": "recall",
+        "f1": "f1"
+    }
+
+    for name, classifier in models.items():
+        print("=" * 50)
+        print(name)
+
+        model = build_pipeline(classifier)
+
+        cv_results = cross_validate(
+            model,
+            X,
+            y,
+            cv=5,
+            scoring=scoring,
+            return_train_score=False
+        )
+
+        for metric in scoring.keys():
+            scores = cv_results[f"test_{metric}"]
+            print(f"{metric}: {scores.mean():.4f} ± {scores.std():.4f}")
+
+
+
 def main():
+
+    models = {
+        "Logistic Regression": LogisticRegression(max_iter=1000),
+        "Random Forest" : RandomForestClassifier(
+            n_estimators=200,
+            random_state=42,
+            class_weight="balanced"
+        ),
+        "Gradient Boosting" : GradientBoostingClassifier(
+            random_state=42
+        ) 
+    }
+
     df = load_data(DATA_PATH)
 
     df = add_features(df)
 
     X,y = features_preparation(df, FEATURES, TARGET)
 
+    compare_models(models,X,y)
+
     X_train, X_test, y_train, y_test = train_test_split(X,y, test_size=0.2,random_state=42, stratify=y)
 
-    model = build_pipeline()
+    best_model = build_pipeline(models["Logistic Regression"])
 
-    cross_validate_model(model, X, y)
+    best_model = train_model(best_model,X_train, y_train)
 
-    model = train_model(model, X_train, y_train)
+    evaluate_model(best_model, X_test, y_test)
 
-    evaluate_model(model, X_test, y_test)
-
-    save_model(model, MODEL_PATH)
+    save_model(best_model, MODEL_PATH)
 
 
 
